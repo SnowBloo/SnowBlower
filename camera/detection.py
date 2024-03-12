@@ -80,33 +80,30 @@ def line_length(centers):
 	
 	return math.sqrt((centers[0][0] - centers[1][0])**2 + (centers[0][1] - centers[1][1])**2)
 
-def determine_distance(tag):
-		length = line_length(tag)
+def determine_distance(centers):
+		length = line_length(centers)
 		if length == 0:
 			return 0
-		return 16787.0 / line_length(tag) / 12
+		return 728.5 / length
 
 def image_processing(image, results):
 	centers = []
 	for r in results:
 		centers.append((int(r.center[0]), int(r.center[1])))
-		
-		cv2.putText(image, "distance: " + str(determine_distance(r)), (int(r.center[0]), int(r.center[1] - 30)),
-				cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255), 2)
 	
-	if len(centers) == 2:
-		cv2.line(image, centers[0], centers[1], (0, 0, 255), 2)
-		cv2.putText(image, "length: " + str(line_length(centers)), (int(centers[0][0]), int(centers[0][1] - 15)),
-			cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255), 2)
-	# draw_center_box(image, centers)
-
 	center = middle(centers)
 	
 	cv2.circle(image, center, 5, (0, 0, 255), -1)
 
 	draw_tag(image, results)
 	
+	cv2.putText(image, "distance: " + str(determine_distance(centers)), (int(center[0]), int(center[1] - 30)),
+		cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255), 2)
 	if len(centers) == 2:
+		cv2.line(image, centers[0], centers[1], (0, 0, 255), 2)
+		cv2.putText(image, "length: " + str(line_length(centers)), (int(centers[0][0]), int(centers[0][1] - 15)),
+			cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255), 2)
+		
 		if determine_orientation(results):
 			cv2.putText(image, "forward", (center[0], center[1] - 15),
 				cv2.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0), 2)
