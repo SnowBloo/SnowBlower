@@ -6,11 +6,17 @@ import cv2
 import apriltag
 import math
 
+from skimage import transform
+from scipy.spatial import distance
+import numpy as np
+
+FLIPPED = True	
+
 # initialize the camera and grab a reference to the raw camera capture
 camera = PiCamera()
-camera.resolution = (1376, 768)
-camera.framerate = 30
-rawCapture = PiRGBArray(camera, size=(1376, 768))
+camera.resolution = (1280, 960)
+camera.framerate = 60
+rawCapture = PiRGBArray(camera, size=(1280, 960))
 
 options = apriltag.DetectorOptions(families='tag36h11',
 								 border=1,
@@ -86,7 +92,24 @@ def determine_distance(centers):
 			return 0
 		return 728.5 / length
 
+def homography_test(image):
+	src = np.array([391, 100, 
+					14, 271,
+					347, 624,
+					747, 298,]).reshape((4, 2))#destination coordinates
+	dst = np.array([100, 100, 
+					100, 650,
+					650, 650,
+					650, 100,]).reshape((4, 2))
+
+	tform = transform.estimate_transform('projective', src, dst)
+	tf_image = transform.warp(image, tform.inverse, output_shape=(768, 1376))	
+
+	cv2.imwrite("homography_test.jpg", tf_image)
+
 def image_processing(image, results):
+	if len(results) == 0:
+		return []
 	centers = []
 	for r in results:
 		centers.append((int(r.center[0]), int(r.center[1])))
@@ -112,28 +135,105 @@ def image_processing(image, results):
 				cv2.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0), 2)
 			
 	return centers
-	
+
+def sortpts_clockwise(A):
+    # Sort A based on Y(col-2) coordinates
+    sortedAc2 = A[np.argsort(A[:,1]),:]
+
+    # Get top two and bottom two points
+    top2 = sortedAc2[0:2,:]
+    bottom2 = sortedAc2[2:,:]
+
+    # Sort top2 points to have the first row as the top-left one
+    sortedtop2c1 = top2[np.argsort(top2[:,0]),:]
+    top_left = sortedtop2c1[0,:]
+
+    # Use top left point as pivot & calculate sq-euclidean dist against
+    # bottom2 points & thus get bottom-right, bottom-left sequentially
+    sqdists = distance.cdist(top_left[None], bottom2, 'sqeuclidean')
+    rest2 = bottom2[np.argsort(np.max(sqdists,0))[::-1],:]
+
+    # Concatenate all these points for the final output
+    return np.concatenate((sortedtop2c1,rest2),axis =0)
+
+homo = False
 # allow the camera to warmup
 time.sleep(0.1)
+
+camera.capture("coord_image.jpg")
+coord_image = cv2.imread("coord_image.jpg")
+
+if FLIPPED:
+	coord_image = cv2.flip(coord_image, 0)
+
+global mouseX, mouseY, src
+
+src =  np.empty(0)
+# numClicks = 0
+def draw_circle(event,x,y,flags,param):
+	global src
+	if event == cv2.EVENT_LBUTTONDBLCLK:
+		# numClicks = numClicks + 1
+		cv2.circle(coord_image,(x,y),5,(255,0,0),-1)
+		src = np.append(src, [x, y])
+
+cv2.namedWindow('image')
+cv2.setMouseCallback('image',draw_circle)
+
+while(True):
+	cv2.imshow('image',coord_image)
+	k = cv2.waitKey(20) & 0xFF
+	if k == 27 or k == ord('q'):
+		break
+	elif k == ord('a'):
+		print(src)
+
+src = src.reshape((4, 2))
+
+print(src)
+src = sortpts_clockwise(src)
+src = src + 10
+print(src)
+# src = np.array([1118, 749, 
+# 				727, 702,
+# 				377, 778,
+# 				823, 885,]).reshape((4, 2))#destination coordinates
+dst = np.array([100, 100,
+				500, 100,
+				500, 500,
+				100, 500,]).reshape((4, 2))#using skimage’s transform module where ‘projective’ is our desired paramete
+
 
 for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 
 	image = frame.array
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+	if FLIPPED:
+		gray = cv2.flip(gray, 0)
+		image = cv2.flip(image, 0)
 	results = detector.detect(gray)
 	
 	centers = image_processing(image, results)
 
+	if homo:
+		h, status = cv2.findHomography(src, dst)
+		homo_img = cv2.warpPerspective(image, h, (400, 400))
+		cv2.imshow("homo", homo_img)
+	
 	cv2.imshow("Image", image)
 	key = cv2.waitKey(1) & 0xFF
-	
+
 	rawCapture.truncate(0)
 
 	if key == ord("q"):
+		camera.close()
 		break
 	
+	if key == ord("t"):
+		homo = not homo
+
 	if key == ord("c"):
 		distance = str(input("input distance: "))
 		
 		cv2.imwrite("distance_" + distance + " ft_" + "length_" + str(line_length(centers)) + " px.jpg" , image)
-	
+
