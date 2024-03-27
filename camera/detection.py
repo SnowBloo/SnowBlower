@@ -92,21 +92,6 @@ def determine_distance(centers):
 			return 0
 		return 728.5 / length
 
-def homography_test(image):
-	src = np.array([391, 100, 
-					14, 271,
-					347, 624,
-					747, 298,]).reshape((4, 2))#destination coordinates
-	dst = np.array([100, 100, 
-					100, 650,
-					650, 650,
-					650, 100,]).reshape((4, 2))
-
-	tform = transform.estimate_transform('projective', src, dst)
-	tf_image = transform.warp(image, tform.inverse, output_shape=(768, 1376))	
-
-	cv2.imwrite("homography_test.jpg", tf_image)
-
 def image_processing(image, results):
 	if len(results) == 0:
 		return []
@@ -194,15 +179,10 @@ print(src)
 src = sortpts_clockwise(src)
 src = src + 10
 print(src)
-# src = np.array([1118, 749, 
-# 				727, 702,
-# 				377, 778,
-# 				823, 885,]).reshape((4, 2))#destination coordinates
 dst = np.array([100, 100,
 				500, 100,
 				500, 500,
-				100, 500,]).reshape((4, 2))#using skimage’s transform module where ‘projective’ is our desired paramete
-
+				100, 500,]).reshape((4, 2))
 
 for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 
