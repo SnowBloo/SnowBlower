@@ -1,2 +1,4 @@
 .vscode/
 *.exe
+
+arduino_com/arduino_secrets.h
