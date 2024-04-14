@@ -5,12 +5,20 @@ import time
 import cv2
 import apriltag
 import math
+import argparse
 
 from skimage import transform
 from scipy.spatial import distance
 import numpy as np
 
-FLIPPED = True	
+from path_plan import PathFinding
+
+
+parser = argparse.ArgumentParser(description="AprilTag Detection")
+parser.add_argument("--flipped", action="store_true", help="Flip the camera")
+
+args = parser.parse_args()
+flipped = args.flipped
 
 # initialize the camera and grab a reference to the raw camera capture
 camera = PiCamera()
@@ -156,7 +164,7 @@ time.sleep(0.1)
 camera.capture("coord_image.jpg")
 coord_image = cv2.imread("coord_image.jpg")
 
-if FLIPPED:
+if flipped:
 	coord_image = cv2.flip(coord_image, 0)
 
 global mouseX, mouseY, src
@@ -196,7 +204,7 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 
 	image = frame.array
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-	if FLIPPED:
+	if flipped:
 		gray = cv2.flip(gray, 0)
 		image = cv2.flip(image, 0)
 	results = detector.detect(gray)
