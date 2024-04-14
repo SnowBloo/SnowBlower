@@ -167,38 +167,34 @@ coord_image = cv2.imread("coord_image.jpg")
 if flipped:
 	coord_image = cv2.flip(coord_image, 0)
 
-global mouseX, mouseY, src
-
 src =  np.empty(0)
-# numClicks = 0
+numClicks = 0
 def draw_circle(event,x,y,flags,param):
-	global src
 	if event == cv2.EVENT_LBUTTONDBLCLK:
-		# numClicks = numClicks + 1
+		global src, numClicks
+		numClicks = numClicks + 1
 		cv2.circle(coord_image,(x,y),5,(255,0,0),-1)
 		src = np.append(src, [x, y])
 
 cv2.namedWindow('image')
 cv2.setMouseCallback('image',draw_circle)
 
-while(True):
+while True:
 	cv2.imshow('image',coord_image)
 	k = cv2.waitKey(20) & 0xFF
-	if k == 27 or k == ord('q'):
+	if k == 27 or k == ord('q') or numClicks == 4:
+		cv2.destroyAllWindows()
 		break
 	elif k == ord('a'):
 		print(src)
 
 src = src.reshape((4, 2))
-
-print(src)
 src = sortpts_clockwise(src)
-src = src + 10
-print(src)
-dst = np.array([100, 100,
-				500, 100,
-				500, 500,
-				100, 500,]).reshape((4, 2))
+
+dst = np.array([0, 0,
+				800, 0,
+				800, 800,
+				0, 800,]).reshape((4, 2))
 
 for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 
@@ -227,6 +223,7 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 
 	if key == ord("q"):
 		camera.close()
+		cv2.destroyAllWindows()
 		break
 	
 	if key == ord("t"):
