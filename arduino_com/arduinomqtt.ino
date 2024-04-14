@@ -64,12 +64,6 @@ void setup() {
   Serial.print("Attempting to connect to the MQTT broker: ");
   Serial.println(broker);
 
-  // if (!mqttClient.connect(broker, port)) {
-  //   Serial.print("MQTT connection failed! Error code = ");
-  //   Serial.println(mqttClient.connectError());
-
-  //   while (1);
-  // }
   client.setServer(server, port);
   client.setCallback(callback);
 }
