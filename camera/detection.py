@@ -141,6 +141,14 @@ def sortpts_clockwise(A):
     # Concatenate all these points for the final output
     return np.concatenate((sortedtop2c1,rest2),axis =0)
 
+def convert_to_homo(pt, h):
+	source_coord = np.array([pt[0], pt[1], 1])
+	homo_pt = np.matmul(h, source_coord)
+
+	homo_pt = homo_pt / homo_pt[2]
+
+	return (int(homo_pt[0]), int(homo_pt[1]))
+
 homo = False
 # allow the camera to warmup
 time.sleep(0.1)
@@ -197,7 +205,11 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 
 	if homo:
 		h, status = cv2.findHomography(src, dst)
-		homo_img = cv2.warpPerspective(image, h, (400, 400))
+		homo_img = cv2.warpPerspective(image, h, (800, 800))
+
+		center_homo = convert_to_homo(centers[0], h)
+
+		cv2.circle(homo_img, center_homo, 4, (255, 0, 0), -1)
 		cv2.imshow("homo", homo_img)
 	
 	cv2.imshow("Image", image)
@@ -211,6 +223,10 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 	
 	if key == ord("t"):
 		homo = not homo
+
+	if key == ord("h"): # debug stuff
+		print(src)
+		print(center_homo)
 
 	if key == ord("c"):
 		distance = str(input("input distance: "))
