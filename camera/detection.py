@@ -22,9 +22,9 @@ flipped = args.flipped
 
 # initialize the camera and grab a reference to the raw camera capture
 camera = PiCamera()
-camera.resolution = (1280, 960)
+camera.resolution = (1280, 800)
 camera.framerate = 60
-rawCapture = PiRGBArray(camera, size=(1280, 960))
+rawCapture = PiRGBArray(camera, size=(1280, 800))
 
 options = apriltag.DetectorOptions(families='tag36h11',
 								 border=1,
@@ -38,6 +38,8 @@ options = apriltag.DetectorOptions(families='tag36h11',
 								 quad_contours=True)
 
 detector = apriltag.Detector(options)
+
+ANGLE_OFFSET = 0
 
 def draw_tag(image, results):
 	for r in results:
@@ -157,15 +159,29 @@ def convert_to_homo(pt, h):
 
 	return (int(homo_pt[0]), int(homo_pt[1]))
 
-homo = False
+def calculate_angle(centers):
+	x_dist = math.abs(centers[0][0] - centers[1][0])
+	y_dist = math.abs(centers[0][1] - centers[1][1])
+
+	angle = math.atan2(y_dist, x_dist) * 180 / math.pi
+
+	return angle - ANGLE_OFFSET
+
+homo = True
 # allow the camera to warmup
 time.sleep(0.1)
 
 camera.capture("coord_image.jpg")
 coord_image = cv2.imread("coord_image.jpg")
+gray = cv2.cvtColor(coord_image, cv2.COLOR_BGR2GRAY)
 
 if flipped:
 	coord_image = cv2.flip(coord_image, 0)
+	gray = cv2.flip(gray, 0)
+
+results = detector.detect(gray)
+
+draw_tag(coord_image, results)
 
 src =  np.empty(0)
 numClicks = 0
@@ -196,6 +212,8 @@ dst = np.array([0, 0,
 				800, 800,
 				0, 800,]).reshape((4, 2))
 
+pathFinding = PathFinding()
+
 for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 
 	image = frame.array
@@ -210,10 +228,32 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 	if homo:
 		h, status = cv2.findHomography(src, dst)
 		homo_img = cv2.warpPerspective(image, h, (800, 800))
+		
+		centers_homo = np.array([convert_to_homo(center, h) for center in centers])
 
-		center_homo = convert_to_homo(centers[0], h)
+		robot_center = np.average(centers_homo, axis = 0)
+		angle = calculate_angle(centers_homo)
 
-		cv2.circle(homo_img, center_homo, 4, (255, 0, 0), -1)
+		pathFinding.setPosition(robot_center)
+		pathFinding.setAngle(angle)
+		
+		angleDiff = pathFinding.getAngleDiff()
+		targetAngle = pathFinding.getTargetAngle()
+
+		if angleDiff > 1:
+			pathFinding.turnRight()
+			angleDiff = targetAngle - angle
+		elif angleDiff < -1:
+			pathFinding.turnLeft()
+			angleDiff = targetAngle - angle
+			
+		
+
+		for center in centers_homo:
+			cv2.circle(homo_img, center, 4, (255, 0, 0), -1)
+
+		cv2.circle(homo_img, robot_center, 4, (255, 0, 0), -1)
+
 		cv2.imshow("homo", homo_img)
 	
 	cv2.imshow("Image", image)
@@ -225,13 +265,16 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 		camera.close()
 		cv2.destroyAllWindows()
 		break
+
+	if key == ord("w"):
+		ANGLE_OFFSET = 0
+		ANGLE_OFFSET = calculate_angle(centers_homo)
 	
 	if key == ord("t"):
 		homo = not homo
 
 	if key == ord("h"): # debug stuff
 		print(src)
-		print(center_homo)
 
 	if key == ord("c"):
 		distance = str(input("input distance: "))

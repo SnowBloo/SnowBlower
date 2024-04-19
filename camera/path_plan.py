@@ -6,31 +6,13 @@ import time
 
 HOSTNAME = "192.168.1.22"
 
-class Robot:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.angle = 0
-    
-    def getPosition(self):
-        return (self.x, self.y)
-    
-    def getAngle(self):
-        return self.angle
-    
-    def setPosition(self, x, y):
-        self.x = x
-        self.y = y
-
-    def setAngle(self, angle):
-        self.angle = angle
-
 class PathFinding:
-    def __init__(self):
+    def __init__(self, position, angle):
         self.pointsDistance = 50
         self.destinationPoints = []
         self.sendData = []
-        self.initVariables()
+        self.initVariables(position, angle)
+        self.position = position
 
     def initVariables(self):
         self.initBox()
@@ -41,15 +23,15 @@ class PathFinding:
     def initBox(self):
         # input destination points here
         self.boxPoints = [
-            (250, 150),  # top left
-            (750, 150),  # top right
-            (750, 850),  # bottom right
-            (250, 850)   # bottom left
+            (0, 0),  # top left
+            (800, 0),  # top right
+            (800, 800),  # bottom right
+            (0, 800)   # bottom left
         ]
 
     def initStart(self):
         # Get the initial position of the robot
-        iterator = self.robot.getPosition()
+        iterator = self.position
 
         # Get the direction vector towards the first box point
         direction = (self.boxPoints[0][0] - iterator[0], self.boxPoints[0][1] - iterator[1])
@@ -104,33 +86,40 @@ class PathFinding:
 
     def initRobot(self):
         # input robot x & y positions here
-        self.robot = Robot(random.randint(0, 1000), random.randint(0, 1000))
+        self.robot = self.position
 
+    def setPosition(self, position):
+        self.position = position
+    
+    def getPosition(self):
+        return self.position
+    
+    def setAngle(self, angle):
+        self.angle = angle
+
+    def getAngle(self):
+        return self.angle
+    
     def main(self):
         for point in self.destinationPoints:
             self.moveToPoint(point)
             self.wait(10)
 
-
     def moveToPoint(self, point):
         # Calculate the vector from the robot to the target point
-        direction = (point[0] - self.robot.getPosition()[0], point[1] - self.robot.getPosition()[1])
+        direction = (point[0] - self.getPosition()[0], point[1] - self.getPosition()[1])
 
         # Calculate the distance
         distance = math.sqrt(direction[0] * direction[0] + direction[1] * direction[1])
 
-        # If the distance is very small, consider the robot has reached the point
-        if distance < 1.0:
-            return
-
         # Calculate the angle
-        angle = math.atan2(direction[1], direction[0]) * 180 / math.pi + 180
+        target_angle = math.atan2(direction[1], direction[0]) * 180 / math.pi + 180
 
         # Normalize the angle to be in the range [0, 360)
-        angle = angle % 360
+        target_angle = target_angle % 360
 
         # Calculate the angle difference between current rotation and target angle
-        angleDiff = angle - self.robot.getAngle()
+        angleDiff = target_angle - self.getAngle()
 
         # Normalize the angle difference to be in the range [-180, 180)
         if angleDiff >= 180:
@@ -139,28 +128,34 @@ class PathFinding:
             angleDiff += 360
 
         # Apply a simple proportional control for turning
-        turnSpeed = 1.0  # Adjust this value to control turning speed
-        if abs(angleDiff) > turnSpeed:
+        # turnSpeed = 1.0  # Adjust this value to control turning speed
+        # if abs(angleDiff) > turnSpeed:
             # Turn towards the target point
-            if angleDiff > 0:
-                self.turnRight(round(angleDiff))
-            else:
-                self.turnLeft(round(-angleDiff))
-        self.moveForward(round(distance) + 5)
+        if angleDiff > 0:
+            while (angleDiff > 0):
+                angleDiff = target_angle - self.getAngle()
+                self.turnRight()
+        else:
+            while (angleDiff < 0):
+                angleDiff = target_angle - self.getAngle()
+                self.turnLeft()
+        
+        while (distance > 10):
+            distance = math.sqrt(direction[0] * direction[0] + direction[1] * direction[1])
+            self.moveForward()
 
-    def moveForward(self, pixels):
-        publish.single("forward", str(pixels), hostname=HOSTNAME)
+    def moveForward(self):
+        publish.single("movement", "forward", hostname=HOSTNAME)
 
-    def moveBackward(self, pixels):
-        publish.single("backward", str(pixels), hostname=HOSTNAME)
+    def moveBackward(self):
+        publish.single("movement", "backward", hostname=HOSTNAME)
 
-    def turnRight(self, degrees):
-        publish.single("right", str(degrees), hostname=HOSTNAME)
+    def turnRight(self):
+        publish.single("movement", "right", hostname=HOSTNAME)
 
-    def turnLeft(self, degrees):
-        publish.single("left", str(degrees), hostname=HOSTNAME)
+    def turnLeft(self):
+        publish.single("movement", "left", hostname=HOSTNAME)
 
-    def wait(self, frames):
-        publish.single("wait", str(frames), hostname=HOSTNAME)
-        time.sleep(frames / 10)
+    def wait(self):
+        publish.single("movement", "wait", hostname=HOSTNAME)
     
