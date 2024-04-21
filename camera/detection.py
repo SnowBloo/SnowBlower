@@ -137,6 +137,19 @@ def calculate_angle(centers):
 
 	return angle - ANGLE_OFFSET
 
+def init_path(points_offset):
+	points = []
+
+	minX = 0
+	minY = 0
+	maxX = 800
+	maxY = 800
+	
+	for y, x in itertools.product(range(minY, maxY + 1, points_offset), range(minX, maxX + 1, points_offset)):
+		points.append((x, y))
+
+	return points
+
 homo = True
 # allow the camera to warmup
 time.sleep(0.1)
@@ -204,23 +217,31 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 		
 		centers_homo = np.array([convert_to_homo(center, h) for center in centers])
 
-		robot_center = np.average(centers_homo, axis = 0)
+		robot_center = np.mean(centers_homo, axis = 0, dtype = int)
 		angle = calculate_angle(centers_homo)
 
-		pathFinding.setPosition(robot_center)
-		pathFinding.setAngle(angle)
-		
-		angleDiff = pathFinding.getAngleDiff()
-		targetAngle = pathFinding.getTargetAngle()
+		point = points[i]
+		direction = (point[0] - robot_center[0], point[1] - robot_center[1])
+
+		robot_distance = math.dist(direction)
+
+		target_angle = math.atan2(direction[1], direction[0]) * 180 / math.pi
+
+		angleDiff = target_angle - angle
 
 		if angleDiff > 1:
-			pathFinding.turnRight()
-			angleDiff = targetAngle - angle
-		elif angleDiff < -1:
 			pathFinding.turnLeft()
-			angleDiff = targetAngle - angle
-			
-		
+		elif angleDiff < -1:
+			pathFinding.turnRight()
+		elif robot_distance > 10:
+			pathFinding.moveForward()
+		elif i < len(points):
+			i += 1 			# move to next point
+		else:
+			# it's done
+			camera.close()
+			cv2.destroyAllWindows()
+			break
 
 		for center in centers_homo:
 			cv2.circle(homo_img, center, 4, (255, 0, 0), -1)
