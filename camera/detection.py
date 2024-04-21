@@ -267,11 +267,11 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 	if key == ord("t"):
 		homo = not homo
 
-	if key == ord("h"): # debug stuff
-		print(src)
-
-	if key == ord("c"):
-		distance = str(input("input distance: "))
-		
-		cv2.imwrite("distance_" + distance + " ft_" + "length_" + str(line_length(centers)) + " px.jpg" , image)
+	if key == ord("d"): # debug info
+		print("====debug info====")
+		print("Angle Offset: " + ANGLE_OFFSET)
+		print("Current Angle: " + angle)
+		print("Target Angle: " + target_angle)
+		print("Distance: " + robot_distance)
+		print("==================")
 
