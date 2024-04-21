@@ -19,6 +19,12 @@ from camera.MQTT import MQTT
 parser = argparse.ArgumentParser(description="AprilTag Detection")
 parser.add_argument("--flipped", action="store_true", help="Flip the camera")
 
+if len(sys.argv) < 1:
+	print("Usage: python3 detection.py <ip address>")
+	exit()
+
+hostname = sys.argv[1]
+
 args = parser.parse_args()
 flipped = args.flipped
 
@@ -214,7 +220,10 @@ dst = np.array([0, 0,
 				800, 800,
 				0, 800,]).reshape((4, 2))
 
-pathFinding = PathFinding()
+pathFinding = MQTT(hostname)
+
+points = init_path(50) 
+i = 0
 
 for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 
