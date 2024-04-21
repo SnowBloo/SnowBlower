@@ -80,36 +80,6 @@ def draw_center_box(image, centers):
 	cv2.line(image, centers[3], centers[2], (0, 0, 255), 2)
 	cv2.line(image, centers[2], centers[0], (0, 0, 255), 2)
 
-def middle(centers):
-	if len(centers) == 0:
-		return (0, 0)
-	# calculate the centerpoint of the centers
-	x = 0
-	y = 0
-	for c in centers:
-		x += c[0]
-		y += c[1]
-		
-	x = int(x / len(centers))
-	y = int(y / len(centers))
-	
-	return (x, y)
-
-def determine_orientation(results):
-	return results[0].tag_id == 0
-
-def line_length(centers):	
-	if len(centers) != 2:
-		return 0
-	
-	return math.sqrt((centers[0][0] - centers[1][0])**2 + (centers[0][1] - centers[1][1])**2)
-
-def determine_distance(centers):
-		length = line_length(centers)
-		if length == 0:
-			return 0
-		return 728.5 / length
-
 def image_processing(image, results):
 	if len(results) == 0:
 		return []
@@ -117,25 +87,17 @@ def image_processing(image, results):
 	for r in results:
 		centers.append((int(r.center[0]), int(r.center[1])))
 	
-	center = middle(centers)
+	center = np.mean(centers, axis = 0, dtype=int)
 	
 	cv2.circle(image, center, 5, (0, 0, 255), -1)
 
 	draw_tag(image, results)
 	
-	cv2.putText(image, "distance: " + str(determine_distance(centers)), (int(center[0]), int(center[1] - 30)),
-		cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255), 2)
 	if len(centers) == 2:
 		cv2.line(image, centers[0], centers[1], (0, 0, 255), 2)
-		cv2.putText(image, "length: " + str(line_length(centers)), (int(centers[0][0]), int(centers[0][1] - 15)),
-			cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255), 2)
 		
-		if determine_orientation(results):
-			cv2.putText(image, "forward", (center[0], center[1] - 15),
-				cv2.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0), 2)
-		else:
-			cv2.putText(image, "backward", (center[0], center[1] - 15),
-				cv2.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0), 2)
+		cv2.text(image, "Angle: " + str(calculate_angle(centers)), (center[0], center[1] + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+		# cv2.text(image, "Distance: " + str(math.dist(centers[0], centers[1])), (center[0], center[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 			
 	return centers
 
@@ -191,7 +153,7 @@ results = detector.detect(gray)
 
 draw_tag(coord_image, results)
 
-src =  np.empty(0)
+src = np.empty(0)
 numClicks = 0
 def draw_circle(event,x,y,flags,param):
 	if event == cv2.EVENT_LBUTTONDBLCLK:
