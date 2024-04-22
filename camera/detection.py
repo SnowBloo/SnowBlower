@@ -195,7 +195,7 @@ dst = np.array([0, 0,
 				800, 800,
 				0, 800,]).reshape((4, 2))
 
-pathFinding = MQTT(hostname)
+robot = MQTT(hostname)
 
 points = init_path(50) 
 i = 0
@@ -229,19 +229,29 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 
 		angleDiff = target_angle - angle
 
-		if angleDiff > 1:
-			pathFinding.turnLeft()
-		elif angleDiff < -1:
-			pathFinding.turnRight()
-		elif robot_distance > 10:
-			pathFinding.moveForward()
-		elif i < len(points):
-			i += 1 			# move to next point
-		else:
-			# it's done
-			camera.close()
-			cv2.destroyAllWindows()
-			break
+		desired_speed = 60 
+		angular_speed_multiplier = 0.8
+		forward_speed_multiplier = 0.8
+
+		robot_length = 10
+
+		angular_speed = angular_speed_multiplier * angleDiff
+		forward_speed = desired_speed - forward_speed_multiplier * angleDiff
+		
+		left_speed = forward_speed - robot_length / 2 * angular_speed
+		right_speed = forward_speed + robot_length / 2 * angular_speed # TODO: adjust and tune parameters
+		
+		robot.set_left(left_speed)
+		robot.set_right(right_speed)
+
+		if robot_distance < 10:
+			if i < len(points):
+				i += 1 			# move to next point
+			else: 
+				# it's done
+				camera.close()
+				cv2.destroyAllWindows()
+				break
 
 		for center in centers_homo:
 			cv2.circle(homo_img, center, 4, (255, 0, 0), -1)
