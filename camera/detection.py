@@ -7,32 +7,28 @@ import apriltag
 import math
 import argparse
 
+import io
 import numpy as np
 import itertools
 import sys
 
 from scipy.spatial import distance
 
-from camera.MQTT import MQTT
+from MQTT import MQTT
 
-
-parser = argparse.ArgumentParser(description="AprilTag Detection")
-parser.add_argument("--flipped", action="store_true", help="Flip the camera")
-
-if len(sys.argv) < 1:
+if len(sys.argv) < 2:
 	print("Usage: python3 detection.py <ip address>")
 	exit()
 
 hostname = sys.argv[1]
 
-args = parser.parse_args()
-flipped = args.flipped
+flipped = False
 
 # initialize the camera and grab a reference to the raw camera capture
 camera = PiCamera()
-camera.resolution = (1280, 800)
+camera.resolution = (1280, 960)
 camera.framerate = 60
-rawCapture = PiRGBArray(camera, size=(1280, 800))
+rawCapture = PiRGBArray(camera, size=(1280, 960))
 
 options = apriltag.DetectorOptions(families='tag36h11',
 								 border=1,
@@ -154,8 +150,8 @@ homo = True
 # allow the camera to warmup
 time.sleep(0.1)
 
-camera.capture(rawCapture, format="bgr")
-coord_image = rawCapture.array
+camera.capture("coord_image.jpg")
+coord_image = cv2.imread("coord_image.jpg")
 gray = cv2.cvtColor(coord_image, cv2.COLOR_BGR2GRAY)
 
 if flipped:
@@ -200,9 +196,9 @@ robot = MQTT(hostname)
 points = init_path(50) 
 i = 0
 
-for frame in camera.capture_continuous(rawCapture, format="bgr"):
-
+for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 	image = frame.array
+	
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 	if flipped:
 		gray = cv2.flip(gray, 0)
@@ -215,9 +211,12 @@ for frame in camera.capture_continuous(rawCapture, format="bgr"):
 		h, status = cv2.findHomography(src, dst)
 		homo_img = cv2.warpPerspective(image, h, (800, 800))
 		
-		centers_homo = np.array([convert_to_homo(center, h) for center in centers])
+		centers_homo = list(np.array([convert_to_homo(center, h) for center in centers]))
+		
+		if len(centers_homo) < 2:
+			continue
 
-		robot_center = tuple(np.mean(centers_homo, axis = 0, dtype = int))
+		robot_center = np.mean(centers_homo, axis = 0, dtype = int)
 		angle = calculate_angle(centers_homo)
 
 		point = points[i]
@@ -260,9 +259,7 @@ for frame in camera.capture_continuous(rawCapture, format="bgr"):
 	
 	cv2.imshow("Image", image)
 	key = cv2.waitKey(1) & 0xFF
-
 	rawCapture.truncate(0)
-
 	if key == ord("q"):
 		camera.close()
 		cv2.destroyAllWindows()
