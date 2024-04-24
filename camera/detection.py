@@ -89,7 +89,7 @@ def image_processing(image, results):
 	
 	center = np.mean(centers, axis = 0, dtype=int)
 	
-	cv2.circle(image, center, 5, (0, 0, 255), -1)
+	cv2.circle(image, (center[0], center[1]), 5, (0, 0, 255), -1)
 
 	draw_tag(image, results)
 	
@@ -130,8 +130,8 @@ def convert_to_homo(pt, h):
 	return (int(homo_pt[0]), int(homo_pt[1]))
 
 def calculate_angle(centers):
-	x_dist = math.abs(centers[0][0] - centers[1][0])
-	y_dist = math.abs(centers[0][1] - centers[1][1])
+	x_dist = centers[0][0] - centers[1][0]
+	y_dist = centers[0][1] - centers[1][1]
 
 	angle = math.atan2(y_dist, x_dist) * 180 / math.pi
 
@@ -217,29 +217,27 @@ for frame in camera.capture_continuous(rawCapture, format="bgr"):
 		
 		centers_homo = np.array([convert_to_homo(center, h) for center in centers])
 
-		robot_center = np.mean(centers_homo, axis = 0, dtype = int)
+		robot_center = tuple(np.mean(centers_homo, axis = 0, dtype = int))
 		angle = calculate_angle(centers_homo)
 
 		point = points[i]
 		direction = (point[0] - robot_center[0], point[1] - robot_center[1])
 
-		robot_distance = math.dist(direction)
+		robot_distance = math.dist(point, robot_center)
 
 		target_angle = math.atan2(direction[1], direction[0]) * 180 / math.pi
 
 		angleDiff = target_angle - angle
 
 		desired_speed = 60 
-		angular_speed_multiplier = 0.8
+		angular_speed_multiplier = 4
 		forward_speed_multiplier = 0.8
-
-		robot_length = 10
 
 		angular_speed = angular_speed_multiplier * angleDiff
 		forward_speed = desired_speed - forward_speed_multiplier * angleDiff
 		
-		left_speed = forward_speed - robot_length / 2 * angular_speed
-		right_speed = forward_speed + robot_length / 2 * angular_speed # TODO: adjust and tune parameters
+		left_speed = forward_speed - angular_speed
+		right_speed = forward_speed + angular_speed # TODO: adjust and tune parameters
 		
 		robot.set_left(left_speed)
 		robot.set_right(right_speed)
@@ -254,9 +252,9 @@ for frame in camera.capture_continuous(rawCapture, format="bgr"):
 				break
 
 		for center in centers_homo:
-			cv2.circle(homo_img, center, 4, (255, 0, 0), -1)
+			cv2.circle(homo_img, (center[0], center[1]), 4, (255, 0, 0), -1)
 
-		cv2.circle(homo_img, robot_center, 4, (255, 0, 0), -1)
+		cv2.circle(homo_img, (robot_center[0], robot_center[1]), 4, (255, 0, 0), -1)
 
 		cv2.imshow("homo", homo_img)
 	
