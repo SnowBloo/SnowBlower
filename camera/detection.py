@@ -154,8 +154,8 @@ homo = True
 # allow the camera to warmup
 time.sleep(0.1)
 
-camera.capture("coord_image.jpg")
-coord_image = cv2.imread("coord_image.jpg")
+camera.capture(rawCapture, format="bgr")
+coord_image = rawCapture.array
 gray = cv2.cvtColor(coord_image, cv2.COLOR_BGR2GRAY)
 
 if flipped:
@@ -200,7 +200,7 @@ robot = MQTT(hostname)
 points = init_path(50) 
 i = 0
 
-for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
+for frame in camera.capture_continuous(rawCapture, format="bgr"):
 
 	image = frame.array
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
