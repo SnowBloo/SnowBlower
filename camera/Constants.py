@@ -1,0 +1,11 @@
+# camera stuff
+RESOLUTION = (640, 480)
+FRAMERATE = 60
+
+# homography dimensions
+HOMOGRAPHY_RES = 800
+
+# path planning tuning
+DESIRED_SPEED = 0
+ANGULAR_SPEED_MULTIPLIER = 10
+FORWARD_SPEED_MULTIPLIER = 0

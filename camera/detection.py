@@ -15,6 +15,7 @@ import sys
 from scipy.spatial import distance
 
 from MQTT import MQTT
+import Constants
 
 if len(sys.argv) < 2:
 	print("Usage: python3 detection.py <ip address>")
@@ -26,9 +27,9 @@ flipped = False
 
 # initialize the camera and grab a reference to the raw camera capture
 camera = PiCamera()
-camera.resolution = (1280, 960)
-camera.framerate = 60
-rawCapture = PiRGBArray(camera, size=(1280, 960))
+camera.resolution = Constants.RESOLUTION
+camera.framerate = Constants.FRAMERATE
+rawCapture = PiRGBArray(camera, size=Constants.RESOLUTION)
 
 options = apriltag.DetectorOptions(families='tag36h11',
 								 border=1,
@@ -58,27 +59,20 @@ def draw_tag(image, results):
 		cv2.line(image, ptC, ptD, (0, 255, 0), 2)
 		cv2.line(image, ptD, ptA, (0, 255, 0), 2)
 		
-		tagID = r.tag_id
+		# tagID = r.tag_id
 		(cX, cY) = (int(r.center[0]), int(r.center[1]))
 		cv2.circle(image, (cX, cY), 5, (0, 0, 255), -1)
-		cv2.putText(image, str(tagID), (cX, cY - 15),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+		# cv2.putText(image, str(tagID), (cX, cY - 15),
+		# 	cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 		
-		tagFamily = r.tag_family.decode("utf-8")
-		cv2.putText(image, tagFamily, (ptA[0], ptA[1] - 15),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+		# tagFamily = r.tag_family.decode("utf-8")
+		# cv2.putText(image, tagFamily, (ptA[0], ptA[1] - 15),
+		# 	cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 	
-def draw_center_box(image, centers):
-	if len(centers) != 4:
-		return 
-	cv2.line(image, centers[0], centers[1], (0, 0, 255), 2)
-	cv2.line(image, centers[1], centers[3], (0, 0, 255), 2)
-	cv2.line(image, centers[3], centers[2], (0, 0, 255), 2)
-	cv2.line(image, centers[2], centers[0], (0, 0, 255), 2)
-
 def image_processing(image, results):
 	if len(results) == 0:
 		return []
+	
 	centers = []
 	for r in results:
 		centers.append((int(r.center[0]), int(r.center[1])))
@@ -92,7 +86,6 @@ def image_processing(image, results):
 	if len(centers) == 2:
 		cv2.line(image, centers[0], centers[1], (0, 0, 255), 2)
 		
-		cv2.text(image, "Angle: " + str(calculate_angle(centers)), (center[0], center[1] + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 		# cv2.text(image, "Distance: " + str(math.dist(centers[0], centers[1])), (center[0], center[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 			
 	return centers
@@ -129,29 +122,73 @@ def calculate_angle(centers):
 	x_dist = centers[0][0] - centers[1][0]
 	y_dist = centers[0][1] - centers[1][1]
 
-	angle = math.atan2(y_dist, x_dist) * 180 / math.pi
+	angle = -math.atan2(y_dist, x_dist) 
 
 	return angle - ANGLE_OFFSET
 
 def init_path(points_offset):
 	points = []
 
-	minX = 0
-	minY = 0
-	maxX = 800
-	maxY = 800
+	minX, minY, maxX, maxY = 0, 0, Constants.HOMOGRAPHY_RES, Constants.HOMOGRAPHY_RES
 	
 	for y, x in itertools.product(range(minY, maxY + 1, points_offset), range(minX, maxX + 1, points_offset)):
 		points.append((x, y))
 
-	return points
+	return 
+
+angleDiff = 0
+def path_navigation(centers_homo):
+		global angleDiff
+		robot_center = np.mean(centers_homo, axis = 0, dtype = int)
+		angle = calculate_angle(centers_homo)
+
+		point = (Constants.HOMOGRAPHY_RES / 2, Constants.HOMOGRAPHY_RES / 2)
+		direction = (point[0] - robot_center[0], point[1] - robot_center[1])
+
+		robot_distance = math.dist(point, robot_center)
+
+		target_angle = 0#math.atan2(direction[1], direction[0])
+
+		angleDiff = target_angle - angle
+
+		if angleDiff > math.pi:
+			angleDiff -= 2 * math.pi
+		elif angleDiff < -math.pi:
+			angleDiff += 2 * math.pi
+
+		angular_speed = Constants.ANGULAR_SPEED_MULTIPLIER * angleDiff
+		forward_speed = Constants.DESIRED_SPEED - Constants.FORWARD_SPEED_MULTIPLIER * angleDiff
+		
+		left_speed = forward_speed - angular_speed
+		right_speed = forward_speed + angular_speed # TODO: adjust and tune parameters
+		
+		# if left_speed < 1:
+		# 	left_speed = 0
+		# if right_speed < 1:
+		# 	right_speed = 0
+		# robot.set_left(left_speed)
+		# robot.set_right(right_speed)
+
+		print(left_speed, right_speed)
+		
+		# if robot_distance < 10:
+		# 	if i < len(points):
+		# 		i += 1 			# move to next point
+		# 	else: 
+		# 		# it's done
+		# 		camera.close()
+		# 		cv2.destroyAllWindows()
+
+		return robot_center, robot_distance, target_angle, angle
+o
+
 
 homo = True
 # allow the camera to warmup
 time.sleep(0.1)
 
-camera.capture("coord_image.jpg")
-coord_image = cv2.imread("coord_image.jpg")
+camera.capture(rawCapture, format="bgr")
+coord_image = rawCapture.array
 gray = cv2.cvtColor(coord_image, cv2.COLOR_BGR2GRAY)
 
 if flipped:
@@ -178,6 +215,7 @@ while True:
 	cv2.imshow('image',coord_image)
 	k = cv2.waitKey(20) & 0xFF
 	if k == 27 or k == ord('q') or numClicks == 4:
+		rawCapture.truncate(0)
 		cv2.destroyAllWindows()
 		break
 	elif k == ord('a'):
@@ -193,9 +231,9 @@ dst = np.array([0, 0,
 
 robot = MQTT(hostname)
 
-points = init_path(50) 
-i = 0
-
+# points = init_path(50) 
+# i = 0
+angle = 0
 for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 	image = frame.array
 	
@@ -213,47 +251,10 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 		
 		centers_homo = list(np.array([convert_to_homo(center, h) for center in centers]))
 		
-		if len(centers_homo) < 2:
-			continue
+		if len(centers_homo) == 2:
+			robot_center, robot_distance, target_angle, angle = path_navigation(centers_homo)
 
-		robot_center = np.mean(centers_homo, axis = 0, dtype = int)
-		angle = calculate_angle(centers_homo)
-
-		point = points[i]
-		direction = (point[0] - robot_center[0], point[1] - robot_center[1])
-
-		robot_distance = math.dist(point, robot_center)
-
-		target_angle = math.atan2(direction[1], direction[0]) * 180 / math.pi
-
-		angleDiff = target_angle - angle
-
-		desired_speed = 60 
-		angular_speed_multiplier = 4
-		forward_speed_multiplier = 0.8
-
-		angular_speed = angular_speed_multiplier * angleDiff
-		forward_speed = desired_speed - forward_speed_multiplier * angleDiff
-		
-		left_speed = forward_speed - angular_speed
-		right_speed = forward_speed + angular_speed # TODO: adjust and tune parameters
-		
-		robot.set_left(left_speed)
-		robot.set_right(right_speed)
-
-		if robot_distance < 10:
-			if i < len(points):
-				i += 1 			# move to next point
-			else: 
-				# it's done
-				camera.close()
-				cv2.destroyAllWindows()
-				break
-
-		for center in centers_homo:
-			cv2.circle(homo_img, (center[0], center[1]), 4, (255, 0, 0), -1)
-
-		cv2.circle(homo_img, (robot_center[0], robot_center[1]), 4, (255, 0, 0), -1)
+		cv2.putText(homo_img, "Angle: " + str(angle * 180 / math.pi), (25, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
 		cv2.imshow("homo", homo_img)
 	
@@ -274,9 +275,10 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 
 	if key == ord("d"): # debug info
 		print("====debug info====")
-		print("Angle Offset: " + ANGLE_OFFSET)
-		print("Current Angle: " + angle)
-		print("Target Angle: " + target_angle)
-		print("Distance: " + robot_distance)
+		print("Angle Offset: " + str(ANGLE_OFFSET))
+		print("Angle Diff: " + str((angleDiff) * 180 / math.pi))
+		print("Current Angle: " + str(angle * 180/math.pi))
+		print("Target Angle: " + str(target_angle * 180/math.pi))
+		print("Distance: " + str(robot_distance))
 		print("==================")
 
