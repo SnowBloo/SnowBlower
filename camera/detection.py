@@ -1,4 +1,5 @@
 # import the necessary packages
+from PythonVidStream import PiVideoStream
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 import time
@@ -6,6 +7,8 @@ import cv2
 import apriltag
 import math
 import argparse
+
+import imutils
 
 import io
 import numpy as np
@@ -142,13 +145,12 @@ def path_navigation(centers_homo):
 		robot_center = np.mean(centers_homo, axis = 0, dtype = int)
 		angle = calculate_angle(centers_homo)
 
-		point = (Constants.HOMOGRAPHY_RES / 2, Constants.HOMOGRAPHY_RES / 2)
+		point = (int(Constants.HOMOGRAPHY_RES / 2), int(Constants.HOMOGRAPHY_RES / 2))
 		direction = (point[0] - robot_center[0], point[1] - robot_center[1])
 
 		robot_distance = math.dist(point, robot_center)
 
-		target_angle = 0#math.atan2(direction[1], direction[0])
-
+		target_angle = -math.atan2(direction[1], direction[0])
 		angleDiff = target_angle - angle
 
 		if angleDiff > math.pi:
@@ -156,21 +158,50 @@ def path_navigation(centers_homo):
 		elif angleDiff < -math.pi:
 			angleDiff += 2 * math.pi
 
+		# if angleDiff < -0.34:
+		# 	robot.send_data(80, -80)
+		# elif angleDiff > 0.34: 
+		# 	robot.send_data(-80, 80)
+
+
+		# if abs(angleDiff) < 10 and robot_distance < 30:
+		# 	robot.send_data(100, 100)
+		# else:
+		# 	robot.send_data(0, 0)
+
 		angular_speed = Constants.ANGULAR_SPEED_MULTIPLIER * angleDiff
 		forward_speed = Constants.DESIRED_SPEED - Constants.FORWARD_SPEED_MULTIPLIER * angleDiff
 		
 		left_speed = forward_speed - angular_speed
 		right_speed = forward_speed + angular_speed # TODO: adjust and tune parameters
 		
-		# if left_speed < 1:
-		# 	left_speed = 0
-		# if right_speed < 1:
-		# 	right_speed = 0
-		# robot.set_left(left_speed)
-		# robot.set_right(right_speed)
+
+		if(abs(left_speed)> Constants.MAX_SPEED):
+			left_speed = left_speed / abs(left_speed) * Constants.MAX_SPEED
+		if abs(right_speed) > Constants.MAX_SPEED:
+			right_speed = right_speed / abs(right_speed) * Constants.MAX_SPEED
+		
+		if abs(left_speed) < Constants.MIN_SPEED:
+			left_speed = abs(left_speed) / left_speed * Constants.MIN_SPEED
+		if abs(right_speed) < Constants.MIN_SPEED:
+			right_speed = abs(right_speed) / right_speed * Constants.MIN_SPEED
+
+		if abs(angleDiff) < 0.17:
+			left_speed, right_speed = 0, 0
+			
+		robot.send_data(left_speed, right_speed)
 
 		print(left_speed, right_speed)
+		print(angleDiff)
 		
+		# 	robot.send_data(60, -60)
+		# else:
+		# 	robot.send_data(0, 0)
+		# if (angleDiff > 20):
+		# 	robot.send_data(60, -60)
+		# else:
+		# 	robot.send_data(0, 0)
+
 		# if robot_distance < 10:
 		# 	if i < len(points):
 		# 		i += 1 			# move to next point
@@ -179,13 +210,12 @@ def path_navigation(centers_homo):
 		# 		camera.close()
 		# 		cv2.destroyAllWindows()
 
-		return robot_center, robot_distance, target_angle, angle
-o
+		return robot_center, robot_distance, target_angle, angle, point
 
 
 homo = True
 # allow the camera to warmup
-time.sleep(0.1)
+time.sleep(2)
 
 camera.capture(rawCapture, format="bgr")
 coord_image = rawCapture.array
@@ -215,11 +245,13 @@ while True:
 	cv2.imshow('image',coord_image)
 	k = cv2.waitKey(20) & 0xFF
 	if k == 27 or k == ord('q') or numClicks == 4:
-		rawCapture.truncate(0)
-		cv2.destroyAllWindows()
 		break
 	elif k == ord('a'):
 		print(src)
+
+rawCapture.truncate(0)
+cv2.destroyAllWindows()
+camera.close()
 
 src = src.reshape((4, 2))
 src = sortpts_clockwise(src)
@@ -234,9 +266,14 @@ robot = MQTT(hostname)
 # points = init_path(50) 
 # i = 0
 angle = 0
-for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
-	image = frame.array
+vs = PiVideoStream().start()
+first = True
+while True:
+	image = vs.read()
+	if image is None:
+		continue
 	
+	image = imutils.resize(image, width=Constants.RESOLUTION[0])
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 	if flipped:
 		gray = cv2.flip(gray, 0)
@@ -251,17 +288,26 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 		
 		centers_homo = list(np.array([convert_to_homo(center, h) for center in centers]))
 		
+		if first and len(centers_homo) == 2:
+			ANGLE_OFFSET = 0
+			ANGLE_OFFSET = calculate_angle(centers_homo)
+			first = False
+			 
 		if len(centers_homo) == 2:
-			robot_center, robot_distance, target_angle, angle = path_navigation(centers_homo)
+			robot_center, robot_distance, target_angle, angle, point = path_navigation(centers_homo)
+			cv2.line(homo_img, (point[0], point[1]), (robot_center[0], robot_center[1]), (0, 255, 0), 2)
 
 		cv2.putText(homo_img, "Angle: " + str(angle * 180 / math.pi), (25, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+		cv2.putText(homo_img, "AngleDiff: " + str(angleDiff * 180 / math.pi), (25, 45), cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255), 2)
+
+		#draw line from robot to point
 
 		cv2.imshow("homo", homo_img)
 	
 	cv2.imshow("Image", image)
 	key = cv2.waitKey(1) & 0xFF
-	rawCapture.truncate(0)
 	if key == ord("q"):
+		vs.stop()
 		camera.close()
 		cv2.destroyAllWindows()
 		break
@@ -275,7 +321,7 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
 
 	if key == ord("d"): # debug info
 		print("====debug info====")
-		print("Angle Offset: " + str(ANGLE_OFFSET))
+		print("Angle Offset: " + str(ANGLE_OFFSET * 180 / math.pi))
 		print("Angle Diff: " + str((angleDiff) * 180 / math.pi))
 		print("Current Angle: " + str(angle * 180/math.pi))
 		print("Target Angle: " + str(target_angle * 180/math.pi))
